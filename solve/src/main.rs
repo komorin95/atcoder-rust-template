@@ -49,7 +49,7 @@ mod static_prime_modint {
             1_000_000_007
         }
     }
-    
+
     #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
     pub struct Mod10_2();
     impl StaticModulus<usize> for Mod10_2 {
@@ -103,6 +103,7 @@ mod static_prime_modint {
         M: StaticModulus<usize>,
     {
         factorial_table: Vec<ModInt<usize, M>>,
+        factorial_inv_table: Vec<ModInt<usize, M>>,
         stirling_second_table: Vec<Vec<ModInt<usize, M>>>,
     }
     use std::convert::TryFrom;
@@ -112,8 +113,17 @@ mod static_prime_modint {
     {
         pub fn new(src_max: usize, dist_max: usize) -> Self {
             let mut factorial_table = vec![ModInt::new(1)];
+            let mut inv_table = vec![ModInt::new(1)];
+            let mut factorial_inv_table = vec![ModInt::new(1)];
+            let m = M::singleton().modulus();
             for i in 1..=dist_max {
                 factorial_table.push(ModInt::new(i) * factorial_table[i - 1]);
+                if i == 1 {
+                    inv_table.push(ModInt::new(1));
+                } else {
+                    inv_table.push(inv_table[m % i] * (m - m / i));
+                }
+                factorial_inv_table.push(inv_table[i] * factorial_inv_table[i - 1]);
             }
             let mut stirling_second_table: Vec<Vec<_>> = Vec::with_capacity(src_max + 1);
             for n in 0..=src_max {
@@ -132,6 +142,7 @@ mod static_prime_modint {
             }
             CombinatoricsTable {
                 factorial_table,
+                factorial_inv_table,
                 stirling_second_table,
             }
         }
@@ -156,7 +167,7 @@ mod static_prime_modint {
             if src > dist {
                 ModInt::new(0)
             } else {
-                self.factorial(dist) * self.factorial(dist - src).inverse()
+                self.factorial(dist) * self.factorial_inv_table[dist - src]
             }
         }
         pub fn tw_surj(&self, src: usize, dist: usize) -> ModInt<usize, M> {
@@ -171,8 +182,8 @@ mod static_prime_modint {
                 ModInt::new(0)
             } else {
                 self.factorial(dist)
-                    * self.factorial(src).inverse()
-                    * self.factorial(dist - src).inverse()
+                    * self.factorial_inv_table[src]
+                    * self.factorial_inv_table[dist - src]
             }
         }
     }
