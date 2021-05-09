@@ -49,6 +49,19 @@ mod static_prime_modint {
             1_000_000_007
         }
     }
+    
+    #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
+    pub struct Mod10_2();
+    impl StaticModulus<usize> for Mod10_2 {
+        fn singleton() -> Self {
+            Mod10_2()
+        }
+    }
+    impl Modulus<usize> for Mod10_2 {
+        fn modulus(&self) -> usize {
+            1_000_308_737
+        }
+    }
 
     #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
     pub struct Mod9();
