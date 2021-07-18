@@ -969,35 +969,60 @@ where
 // The code is based on the following web site.
 // https://algo-logic.info/segment-tree/
 #[derive(Clone, PartialEq, Debug)]
-struct LazySegmentTree<A, CUnit, CMult> {
+struct LazySegmentTree<A, CUnit, CMult, B, CBUnit, CBMult, CAction> {
     data: Vec<A>,
-    lazy: Vec<A>,
+    lazy: Vec<B>,
     monoid_unit_closure: CUnit,
     monoid_op_closure: CMult,
+    action_unit_closure: CBUnit,
+    action_mult_closure: CBMult,
+    action_closure: CAction,
 }
 
 #[allow(dead_code)]
-impl<A, CUnit, CMult> LazySegmentTree<A, CUnit, CMult>
+impl<A, CUnit, CMult, B, CBUnit, CBMult, CAction>
+    LazySegmentTree<A, CUnit, CMult, B, CBUnit, CBMult, CAction>
 where
     A: Copy + std::cmp::Eq,
     CUnit: Fn() -> A,
     CMult: Fn(A, A) -> A,
+    B: Copy + std::cmp::Eq,
+    CBUnit: Fn() -> B,
+    CBMult: Fn(B, B) -> B,
+    CAction: Fn(B, A) -> A,
 {
-    fn new(n: usize, monoid_unit_closure: CUnit, monoid_op_closure: CMult) -> Self {
+    fn new(
+        n: usize,
+        monoid_unit_closure: CUnit,
+        monoid_op_closure: CMult,
+        action_unit_closure: CBUnit,
+        action_mult_closure: CBMult,
+        action_closure: CAction,
+    ) -> Self {
         let mut nn = 1;
         while nn < n {
             nn *= 2;
         }
         let this = Self {
             data: vec![monoid_unit_closure(); 2 * nn - 1],
-            lazy: vec![monoid_unit_closure(); 2 * nn - 1],
+            lazy: vec![action_unit_closure(); 2 * nn - 1],
             monoid_unit_closure,
             monoid_op_closure,
+            action_unit_closure,
+            action_mult_closure,
+            action_closure,
         };
         return this;
     }
 
-    fn from_slice(sl: &[A], monoid_unit_closure: CUnit, monoid_op_closure: CMult) -> Self {
+    fn from_slice(
+        sl: &[A],
+        monoid_unit_closure: CUnit,
+        monoid_op_closure: CMult,
+        action_unit_closure: CBUnit,
+        action_mult_closure: CBMult,
+        action_closure: CAction,
+    ) -> Self {
         let n = sl.len();
         let mut nn = 1;
         while nn < n {
@@ -1012,29 +1037,29 @@ where
                 data[j] = (monoid_op_closure)(data[j * 2 + 1], data[j * 2 + 2]);
             }
         }
-        let lazy = vec![monoid_unit_closure(); 2 * nn - 1];
+        let lazy = vec![action_unit_closure(); 2 * nn - 1];
         Self {
             data,
             lazy,
             monoid_unit_closure,
             monoid_op_closure,
+            action_unit_closure,
+            action_mult_closure,
+            action_closure,
         }
     }
 
     fn eval(&mut self, k: usize) {
-        if self.lazy[k] == (self.monoid_unit_closure)() {
-            return;
-        }
         let n = (self.lazy.len() + 1) / 2;
         if k < n - 1 {
-            self.lazy[k * 2 + 1] = self.lazy[k];
-            self.lazy[k * 2 + 2] = self.lazy[k];
+            self.lazy[k * 2 + 1] = (self.action_mult_closure)(self.lazy[k], self.lazy[k * 2 + 1]);
+            self.lazy[k * 2 + 2] = (self.action_mult_closure)(self.lazy[k], self.lazy[k * 2 + 2]);
         }
-        self.data[k] = self.lazy[k];
-        self.lazy[k] = (self.monoid_unit_closure)();
+        self.data[k] = (self.action_closure)(self.lazy[k], self.data[k]);
+        self.lazy[k] = (self.action_unit_closure)();
     }
 
-    fn sub_update(&mut self, a: usize, b: usize, x: A, k: usize, l: usize, r: usize) {
+    fn sub_update(&mut self, a: usize, b: usize, x: B, k: usize, l: usize, r: usize) {
         self.eval(k);
         if a <= l && r <= b {
             self.lazy[k] = x;
@@ -1046,7 +1071,7 @@ where
         }
     }
 
-    fn update_internal(&mut self, a: usize, b: usize, x: A) {
+    fn update_internal(&mut self, a: usize, b: usize, x: B) {
         let n = (self.lazy.len() + 1) / 2;
         self.sub_update(a, b, x, 0, 0, n)
     }
@@ -1072,23 +1097,30 @@ where
 
 trait LazyRangeQuery<T> {
     type Output;
+    type Action;
     fn query(&mut self, r: T) -> Self::Output;
-    fn update(&mut self, r: T, x: Self::Output);
+    fn update(&mut self, r: T, x: Self::Action);
 }
 
 #[allow(dead_code)]
-impl<A, CUnit, CMult> LazyRangeQuery<std::ops::Range<usize>> for LazySegmentTree<A, CUnit, CMult>
+impl<A, CUnit, CMult, B, CBUnit, CBMult, CAction> LazyRangeQuery<std::ops::Range<usize>>
+    for LazySegmentTree<A, CUnit, CMult, B, CBUnit, CBMult, CAction>
 where
     A: Copy + std::cmp::Eq,
     CUnit: Fn() -> A,
     CMult: Fn(A, A) -> A,
+    B: Copy + std::cmp::Eq,
+    CBUnit: Fn() -> B,
+    CBMult: Fn(B, B) -> B,
+    CAction: Fn(B, A) -> A,
 {
     type Output = A;
+    type Action = B;
     fn query(&mut self, range: std::ops::Range<usize>) -> A {
         return self.query_internal(range.start, range.end);
     }
 
-    fn update(&mut self, range: std::ops::Range<usize>, x: A) {
+    fn update(&mut self, range: std::ops::Range<usize>, x: B) {
         self.update_internal(range.start, range.end, x);
     }
 }
